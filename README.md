@@ -1,194 +1,91 @@
-# S3 Bucket Module
+The Terraform module is used by the ITGix AWS Landing Zone - https://itgix.com/itgix-landing-zone/
 
-Terraform module to provision an S3 bucket with secure defaults and optional features:
-- Versioning, ownership controls, encryption (SSE-S3 or SSE-KMS)
-- Public access block (private by default)
-- Optional server access logging
-- Optional lifecycle expiration
-- Optional cross-region replication
-- Optional S3 static website hosting (public website endpoint)
-- Optional CloudFront origin access hook (private bucket)
+# AWS S3 Bucket Terraform Module
 
-## Naming Convention
+This module creates an S3 bucket with encryption (SSE-S3 or SSE-KMS), versioning, lifecycle policies, access logging, cross-region replication, website hosting, and CloudFront origin access support.
 
-Primary bucket name is generated as:
+Part of the [ITGix AWS Landing Zone](https://itgix.com/itgix-landing-zone/).
 
-`<account_name>-<account_id>-<account_environment>-s3-<bucket_purpose>`
+## Resources Created
 
-Example:
+- S3 bucket with configurable encryption and versioning
+- Bucket policy (deny insecure transport, enforce TLS 1.2)
+- *(Optional)* Access logging configuration
+- *(Optional)* Lifecycle expiration rules
+- *(Optional)* Cross-region replication with IAM role
+- *(Optional)* Static website hosting
+- *(Optional)* CloudFront origin access policy
 
-`platform-<account_id>-prod-s3-tf-state`
+## Inputs
 
-`account_id` is detected automatically via `aws_caller_identity`.
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| `account_name` | Logical account/domain name | `string` | — | yes |
+| `account_environment` | Environment name (dev, int, prod) | `string` | — | yes |
+| `bucket_purpose` | Purpose of the bucket (e.g. tf-state, assets, logs) | `string` | — | yes |
+| `tags` | Tags applied to all resources | `map(string)` | `{}` | no |
+| `enable_versioning` | Enable bucket versioning | `bool` | `true` | no |
+| `bucket_owner_enforced` | Enable BucketOwnerEnforced object ownership | `bool` | `true` | no |
+| `object_lock_enabled` | Enable S3 Object Lock | `bool` | `false` | no |
+| `force_destroy` | Allow Terraform to delete buckets with objects | `bool` | `false` | no |
+| `use_sse_s3_encryption` | If true, use SSE-S3 (AES256). If false, use SSE-KMS | `bool` | `true` | no |
+| `primary_kms_key_arn` | KMS key ARN for primary bucket (required when SSE-KMS) | `string` | `null` | no |
+| `replica_kms_key_arn` | KMS key ARN for replica bucket | `string` | `null` | no |
+| `manage_bucket_policy` | Whether module manages bucket policies | `bool` | `true` | no |
+| `deny_insecure_transport` | Deny non-HTTPS requests | `bool` | `true` | no |
+| `enforce_tls_1_2_minimum` | Deny TLS versions lower than 1.2 | `bool` | `true` | no |
+| `access_logging_target_bucket` | S3 bucket for access logs (empty disables) | `string` | `""` | no |
+| `access_logging_prefix` | Prefix for access logs | `string` | `"AWSLogs/"` | no |
+| `enable_partitioned_access_logs` | Enable EventTime partitioning for access logs | `bool` | `false` | no |
+| `enable_lifecycle_expiration` | Enable lifecycle expiration | `bool` | `false` | no |
+| `lifecycle_expiration_days` | Days after which objects expire | `number` | `90` | no |
+| `enable_lifecycle_abort_incomplete_multipart_upload` | Abort incomplete multipart uploads | `bool` | `true` | no |
+| `lifecycle_abort_incomplete_multipart_upload_days` | Days to abort incomplete multipart uploads | `number` | `7` | no |
+| `enable_cross_region_replication` | Enable S3 cross-region replication | `bool` | `false` | no |
+| `replica_suffix` | Suffix for the replica bucket name | `string` | `"-replica"` | no |
+| `replication_object_prefix` | Only replicate objects with this prefix | `string` | `""` | no |
+| `replication_storage_class` | Storage class for replicated objects | `string` | `"STANDARD"` | no |
+| `replica_role_name` | IAM role name for S3 replication | `string` | `"s3-replication"` | no |
+| `enable_website_hosting` | Enable S3 static website hosting | `bool` | `false` | no |
+| `website_index_document` | Index document for website hosting | `string` | `"index.html"` | no |
+| `website_error_document` | Error document for website hosting | `string` | `"error.html"` | no |
+| `enable_public_read_for_website` | Allow public s3:GetObject | `bool` | `false` | no |
+| `enable_cloudfront_origin_access` | Enable CloudFront origin access (keep bucket private) | `bool` | `false` | no |
+| `cloudfront_distribution_arns` | CloudFront distribution ARNs allowed to read from this bucket | `list(string)` | `[]` | no |
 
-## Providers
+## Outputs
 
-This module uses a replica provider alias for optional cross-region replication. Even if CRR is disabled, it is recommended to pass the alias.
+| Name | Description |
+|------|-------------|
+| `primary_bucket_name` | Name of the primary bucket |
+| `primary_bucket_arn` | ARN of the primary bucket |
+| `replica_bucket_name` | Name of the replica bucket (if replication enabled) |
+| `replica_bucket_arn` | ARN of the replica bucket (if replication enabled) |
+| `replication_role_arn` | ARN of the IAM replication role (if enabled) |
+| `uses_sse_s3_encryption` | Whether SSE-S3 (AES256) is used |
+| `primary_kms_key_arn` | Primary KMS key ARN (when SSE-KMS) |
+| `replica_kms_key_arn` | Replica KMS key ARN (when replication + SSE-KMS) |
+| `website_endpoint` | S3 website endpoint (if website hosting enabled) |
+| `website_domain` | S3 website domain (if website hosting enabled) |
+| `website_public_mode` | True when bucket is configured for public website |
+| `cloudfront_origin_access_mode` | True when CloudFront origin access mode is enabled |
 
-```hcl
-provider "aws" {
-  region = "eu-central-1"
-}
-
-provider "aws" {
-  alias  = "replica"
-  region = "eu-west-1"
-}
-
-module "s3_bucket" {
-  source = "..."
-
-  providers = {
-    aws         = aws
-    aws.replica = aws.replica
-  }
-
-  # ...
-}
-```
-
-## Website Modes
-
-### 1) S3 Website Endpoint (Public)
-
-Enable:
-- `enable_website_hosting = true`
-- `enable_public_read_for_website = true`
-
-This config:
-- enables `aws_s3_bucket_website_configuration`
-- relaxes public access block enough to allow a public bucket policy
-- adds a policy statement allowing `s3:GetObject` publicly
-
-### 2) CloudFront Origin Access Hook (Private)
-
-Enable:
-- `enable_cloudfront_origin_access = true`
-- set `cloudfront_distribution_arns = ["arn:aws:cloudfront::...:distribution/...."]`
-
-This config:
-- keeps bucket private
-- adds a bucket policy statement allowing `s3:GetObject` only for CloudFront with matching SourceArn
-
-> If you prefer, you can keep `manage_bucket_policy=false` and manage all policies externally.
-
-## Usage
+## Usage Example
 
 ```hcl
-terraform {
-  required_version = ">= 1.5.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.50"
-    }
-  }
-}
-
-# Primary region provider (example: eu-central-1)
-provider "aws" {
-  region = "eu-central-1"
-}
-
-# Replica region provider alias (example: eu-west-1)
-provider "aws" {
-  alias  = "replica"
-  region = "eu-west-1"
-}
-
-# Example: One module showcasing all options.
-
-# - Bucket names are globally unique. Pick a bucket_purpose unique enough for your org.
-# - For website endpoint public mode, you MUST allow public read (enable_public_read_for_website=true).
-# - For CloudFront OAC mode, keep bucket private and pass distribution ARNs, OR manage bucket policy externally.
-
 module "s3_bucket" {
-  source = ".."
+  source = "path/to/tf-module-aws-s3-bucket"
 
-  # The module requires a replica provider alias even if replication is disabled.
-  providers = {
-    aws         = aws
-    aws.replica = aws.replica
-  }
-
-  # Naming
   account_name        = "platform"
   account_environment = "prod"
-  bucket_purpose      = "tf-state" # e.g. tf-state | assets | logs | website
+  bucket_purpose      = "tf-state"
 
-  # Common
-  tags = {
-    "managed-by" = "terraform"
-    "owner"      = "platform"
-    "env"        = "prod"
-  }
-
-  # Bucket core settings
-  enable_versioning     = true
-  bucket_owner_enforced = true
-  object_lock_enabled   = false
-  force_destroy         = false
-
-  # Encryption
-  # Option A: SSE-S3 (AES256)
-  use_sse_s3_encryption = true
-
-  # Option B: SSE-KMS (uncomment and set the KMS keys)
-  # use_sse_s3_encryption = false
-  # primary_kms_key_arn   = "arn:aws:kms:eu-central-1:123456789012:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-
-  # Security / Policies
-  manage_bucket_policy    = true
-  deny_insecure_transport = true
-  enforce_tls_1_2_minimum = true
-
-  # Logging
-  access_logging_target_bucket   = ""         # set to enable server access logs
-  access_logging_prefix          = "AWSLogs/" # default
-  enable_partitioned_access_logs = false
-
-  # Lifecycle
+  enable_versioning          = true
   enable_lifecycle_expiration = false
-  lifecycle_expiration_days   = 90
 
-  # Replication (Cross-region)
-  enable_cross_region_replication = false
-  replica_suffix                  = "-replica"
-  replication_object_prefix       = "" # empty = replicate all
-  replication_storage_class       = "STANDARD"
-  replica_role_name               = "s3-replication"
-
-  # If using replication + SSE-KMS:
-  # replica_kms_key_arn = "arn:aws:kms:eu-west-1:123456789012:key/yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
-
-  # Website hosting
-  # Variant 1: S3 website endpoint (PUBLIC)
-  enable_website_hosting         = false
-  website_index_document         = "index.html"
-  website_error_document         = "error.html"
-  enable_public_read_for_website = false
-
-  # Website hosting
-  # Variant 2: CloudFront OAC hook (PRIVATE)
-  enable_cloudfront_origin_access = false
-  cloudfront_distribution_arns = [
-    # "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
-  ]
-}
-
-output "primary_bucket_name" {
-  value = module.s3_bucket.primary_bucket_name
-}
-
-output "website_endpoint" {
-  value = module.s3_bucket.website_endpoint
+  tags = {
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
 }
 ```
-## Notes
-
-- S3 bucket names are globally unique; choose `bucket_purpose` accordingly.
-- If lifecycle expiration is enabled, the module can also abort incomplete multipart uploads (enabled by default) via:
-    - `enable_lifecycle_abort_incomplete_multipart_upload`
-    - `lifecycle_abort_incomplete_multipart_upload_days`
-- If you enable cross region replication and use SSE-KMS, you must provide both `primary_kms_key_arn` and `replica_kms_key_arn` and ensure your KMS key policies allow the replication role.
