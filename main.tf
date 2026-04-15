@@ -175,6 +175,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
   count  = var.enable_lifecycle_expiration ? 1 : 0
   bucket = aws_s3_bucket.main.id
 
+  lifecycle {
+    precondition {
+      condition     = !(var.enable_lifecycle_expire_non_current_versions && !var.enable_versioning)
+      error_message = "enable_lifecycle_expire_non_current_versions requires enable_versioning=true."
+    }
+  }
+
   rule {
     id     = "expire-all-objects"
     status = "Enabled"
@@ -184,6 +191,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
       for_each = var.enable_lifecycle_abort_incomplete_multipart_upload ? [1] : []
       content {
         days_after_initiation = var.lifecycle_abort_incomplete_multipart_upload_days
+      }
+    }
+
+    dynamic "noncurrent_version_expiration" {
+      for_each = var.enable_lifecycle_expire_non_current_versions ? [1] : []
+      content {
+        noncurrent_days = var.lifecycle_expire_non_current_versions_days
       }
     }
 

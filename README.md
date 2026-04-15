@@ -41,6 +41,8 @@ Part of the [ITGix AWS Landing Zone](https://itgix.com/itgix-landing-zone/).
 | `lifecycle_expiration_days` | Days after which objects expire | `number` | `90` | no |
 | `enable_lifecycle_abort_incomplete_multipart_upload` | Abort incomplete multipart uploads | `bool` | `true` | no |
 | `lifecycle_abort_incomplete_multipart_upload_days` | Days to abort incomplete multipart uploads | `number` | `7` | no |
+| `enable_lifecycle_expire_non_current_versions` | Expire non-current versions | `bool` | `false` | no |
+| `lifecycle_expire_non_current_versions_days` | Days to expire non-current versions | `number` | `7` | no |
 | `enable_cross_region_replication` | Enable S3 cross-region replication | `bool` | `false` | no |
 | `replica_suffix` | Suffix for the replica bucket name | `string` | `"-replica"` | no |
 | `replication_object_prefix` | Only replicate objects with this prefix | `string` | `""` | no |
