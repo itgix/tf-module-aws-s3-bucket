@@ -158,6 +158,23 @@ variable "lifecycle_abort_incomplete_multipart_upload_days" {
   }
 }
 
+variable "enable_lifecycle_expire_non_current_versions" {
+  description = "When lifecycle expiration is enabled, also expire the non-current versions after a number of days."
+  type        = bool
+  default     = false
+}
+
+variable "lifecycle_expire_non_current_versions_days" {
+  description = "Number of days after which non-current object versions expire (when enabled)."
+  type        = number
+  default     = 7
+
+  validation {
+    condition     = var.lifecycle_expire_non_current_versions_days >= 1
+    error_message = "lifecycle_expire_non_current_versions_days must be at least 1."
+  }
+}
+
 # Replication
 variable "enable_cross_region_replication" {
   description = "Enable S3 cross-region replication."
