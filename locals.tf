@@ -11,8 +11,8 @@ locals {
 
   replica_bucket_name = var.enable_cross_region_replication ? "${local.primary_bucket_name}${var.replica_suffix}" : null
 
-  primary_region = data.aws_region.current.id
-  replica_region = var.enable_cross_region_replication ? data.aws_region.replica.id : null
+  primary_region = data.aws_region.current.region
+  replica_region = var.enable_cross_region_replication ? data.aws_region.replica.region : null
 
   logging_target_prefix = "${trim(var.access_logging_prefix, "/")}/${local.primary_bucket_name}/"
 
