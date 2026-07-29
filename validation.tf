@@ -15,9 +15,9 @@ check "replication_requires_versioning" {
 check "replication_kms_requires_replica_key" {
   assert {
     condition = !(
-    var.enable_cross_region_replication &&
-    !var.use_sse_s3_encryption &&
-    (var.replica_kms_key_arn == null || trimspace(var.replica_kms_key_arn) == "")
+      var.enable_cross_region_replication &&
+      !var.use_sse_s3_encryption &&
+      (var.replica_kms_key_arn == null || trimspace(var.replica_kms_key_arn) == "")
     )
     error_message = "When enable_cross_region_replication=true and SSE-KMS is used, replica_kms_key_arn must be set."
   }
